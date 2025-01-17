@@ -1,109 +1,53 @@
-import glob
-import pandas as pd
 import numpy as np
+import pandas as pd
+import os
 
 Name='adsorptionPt111'
-N_BEE=1
-
-label=[]
-index=[]
-
-#This goes throug all the species list files that were used to construct the ensembles
-#each file is for a specific group in the adsorptionPt111 file. The names have to match
-groups=[]
-for filename in glob.iglob('beef-ensembles/*_bee.txt'):
-    bits_dat_info=filename.split('_')
-    bits_dat=bits_dat_info[0].replace('.txt','').replace('ensembles/','')
-    groups.append(bits_dat)
-    
-#Cycle through the entire ensemble of BEEF values
-for k in range(N_BEE):
-    file="".join((Name,"_",str(k),".py"))
-    original_file="".join((Name,".py"))
-    s=open(original_file,'r')
-    new_file_content=""    
+N_members=2
 
 
-    for line in s:
-        if line.startswith("    label"):
-            old=line.strip()
-            bits=line.split(" = ")
-            node_name = bits[1].replace(",","").replace("\n","").replace('"',"")
-            label.append(node_name.replace("*","X"))
+key1 = '    label' 
+key2 = 'H298'
+labels=[]
+H298_lines = []
+original_filename="".join((Name,".py"))
 
-        if line.startswith("    index"):
-            old=line.strip()
-            bits=line.split(" = ")
-            index.append(int(bits[1].replace(",","")))
-            new_line=line.replace(old,old)
-            new_file_content += new_line  
+
+with open(original_filename,'r') as f:
+    original_lines = f.readlines()
+
+for i, line in enumerate(original_lines):
+    if line.startswith(key1) and "\"RX\"" not in line:
+        old=line.strip()
+        bits=line.split(" = ")
+        label = bits[1].replace(",","").replace("\n","").replace('"',"")
+        labels.append(label)
+    if key2 in line and '#' not in line:
+        H298_lines.append(i)
+
+beef_data = np.zeros([N_members,len(labels)])
+for i in range(len(labels)):
+    filename='beef-ensembles/' + str(labels[i]) + '_bee.txt'
+    data=pd.read_csv(filename, sep="\t", header=0)
+    beef_data[:,i]=data.iloc[0:N_members,0]
+
+for i in range(N_members):
+    new_lines = []
+    spec = 0
+    for j, line in enumerate(original_lines):
+        if j in H298_lines:
+            H = float(line.split('(')[1].split(',')[0])
+            unit = line.split('\'')[1].split('\'')[0]
+            if unit != 'kJ/mol':
+                raise Exception("unit for the enthalpy of {} is not in kJ/mol".format(str(labels[spec])))
+            perturbation = beef_data[i,spec]
+            changed_H=np.round(H+float(perturbation),2)
+            spec +=1
+            new_str ='        H298=({}, \'kJ/mol\'),\n'.format(str(changed_H))
+            new_lines.append(new_str)
         else:
-            old=line.strip()
-            new_line=line.replace(old,old)
-            new_file_content += new_line  
-            
-    writing_file = open(file, "w")
-    writing_file.write(new_file_content)
-    writing_file.close()
+            new_lines.append(original_lines[j])
 
-    #The number of possible entries to modify is given by the number of collected labels
-    no=len(label)
-    for i in range(1,no):
-        s=open(file,'r')
-        new_file_content="" 
-        idx="".join(("    index = ",str(index[i]),","))
-        #When we look for the last script, we have to adjust the index since there is no i+1 for the switch. 
-        if i==no-1:
-            idx_next="".join(("    index = ",str(index[-1]+1),","))
-        else:    
-            idx_next="".join(("    index = ",str(index[i+1]),","))
-        flag=False
-        for line in s: 
-            if idx in line:
-                flag=True
-                old=line.strip()
-                new_line=line.replace(old,old)
-                new_file_content += new_line 
-                for line in s:
-                    check=line.strip()
-                    if check.startswith("H298=(") and flag:
-                        old=line.strip()
-                        bits_info=line.split(",")
-                        bits=bits_info[0].strip().split("(")   
-                        initial_H=float(bits[1])
-                        
-                        #No nitrogen chemistry at the moment, so these groups are not changed at all
-                        #Whenever a group label is not in the list of groups for which ensembles are availabel
-                        # the value is not changed
-                        if str(label[i]) in groups:
-                            filename='ensembles/'+ str(label[i]) + '_bee.txt'
-                            data=pd.read_csv(filename, sep="\t", header=0)
-                            perturbation=data.iloc[k,0]     
-                            changed_H=np.round(initial_H+float(perturbation),2)
-                        else:
-                            print(label[i])
-                            changed_H=initial_H
-                            
-                        modified=bits[0] + '(' + str(changed_H) + ',' +  bits_info[1] + ','
-                        new_line=line.replace(old,modified)
-                        new_file_content +=new_line
-                        
-                    elif idx_next in line:
-                        flag=False  
-                        old=line.strip()
-                        new_line=line.replace(old,old)
-                        new_file_content += new_line  
-                    else:
-                        old=line.strip()
-                        new_line=line.replace(old,old)
-                        new_file_content += new_line                             
-
-            else:
-                old=line.strip()
-                new_line=line.replace(old,old)
-                new_file_content += new_line                  
-               
-        s.close()
-        writing_file = open(file, "w")
-        writing_file.write(new_file_content)
-        writing_file.close()
+    newname = Name + '_{}.py'.format(str(i))
+    with open(newname,'w') as f:
+        f.writelines(new_lines)
