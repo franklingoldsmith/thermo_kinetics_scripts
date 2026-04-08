@@ -137,7 +137,7 @@ class Gas:
             V = kB*T/P_ref
             q_trans[i] = (2*pi*m*amu*kB*T/h**2) ** 1.5 * V
             S_trans[i] = R * (2.5 + math.log(q_trans[i]))
-            Cp_trans[i] = 2.5 * R
+            Cp_trans[i] = 2.5 * R 
             dH_trans[i] = 2.5 * R * T
 
         return q_trans, S_trans, dH_trans, Cp_trans
@@ -208,6 +208,8 @@ class Gas:
         return q_rot, S_rot, dH_rot, Cv_rot
 
     def get_thermo(self):
+        R = self.R
+        temps = self.temperatures
 
         h_correction = 4.234  # kJ/mol. enthalpy_H(298) - enthalpy_H(0)
         c_correction = 1.051  # kJ/mol. enthalpy_C(298) - enthalpy_C(0)
@@ -228,8 +230,8 @@ class Gas:
 
         Q = q_v * q_t * q_r * q_e
         S = S_t + S_v + S_r + S_e
-        dH = dH_t + dH_v + dH_r + dH_e
-        Cp = Cp_t + Cv_v + Cv_r + Cv_e
+        dH = dH_t + dH_v + dH_r + dH_e + R * temps
+        Cp = Cp_t + Cv_v + Cv_r + Cv_e + R * np.ones(len(temps))
         HOF_0K = self.heat_of_formation_0K[0]
         self.HOF_298K = HOF_0K + dH[0] - HOF_correction
         H = self.HOF_298K + dH - dH[0]

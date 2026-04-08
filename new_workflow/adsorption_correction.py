@@ -168,6 +168,8 @@ class AdsorptionCorrectionTree:
             con_str = self.tree[node_id].data['connectivity_string']
             subtree = self.tree.subtree(node_id)
             for subnode_id in subtree.expand_tree():
+                if subnode_id == node_id:  # skip self
+                    continue
                 tmpgasnames = subtree[subnode_id].data['gas_precursors']
                 tmpadsnames = subtree[subnode_id].data['adsorbates']
                 gas_names.extend(tmpgasnames)
